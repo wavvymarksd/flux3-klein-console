@@ -1,19 +1,672 @@
 <!doctype html>
-<html>
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width" />
-		<title>My static Space</title>
-		<link rel="stylesheet" href="style.css" />
-	</head>
-	<body>
-		<div class="card">
-			<h1>Welcome to your static Space!</h1>
-			<p>You can modify this app directly by editing <i>index.html</i> in the Files and versions tab.</p>
-			<p>
-				Also don't forget to check the
-				<a href="https://huggingface.co/docs/hub/spaces" target="_blank">Spaces documentation</a>.
-			</p>
-		</div>
-	</body>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FLUX 3 Klein Console</title>
+<meta name="description" content="A retro 8-bit console front-end for FLUX 3 Image Klein text-to-image and image editing.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --room: #0c0c0e;
+    --shell: #1d1e21;
+    --shell-hi: #2a2b2f;
+    --shell-lo: #141517;
+    --plate: #3a3c41;
+    --plate-lo: #2b2d31;
+    --groove: #0a0a0b;
+    --label: #a8acb3;
+    --label-dim: #6c7077;
+    --red: #d42a2a;
+    --red-lo: #8e1717;
+    --red-glow: #ff4b3e;
+    --screen: #070908;
+    --phosphor: #9cf7a0;
+    --phosphor-dim: #4f8a52;
+    --amber: #ffcf5a;
+    --cart: #5b5f66;
+    --cart-lo: #44474d;
+    --cart-label: #e9e3d3;
+    --ink: #1a1a1a;
+    --px: 'Press Start 2P', monospace;
+    --crt: 'VT323', monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #1c1c22 0%, transparent 60%),
+      repeating-linear-gradient(0deg, #0e0e10 0 2px, #0b0b0d 2px 4px),
+      var(--room);
+    color: var(--label);
+    font-family: var(--px);
+    min-height: 100vh;
+    padding: 28px 16px 48px;
+    -webkit-font-smoothing: none;
+  }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px dashed var(--amber); outline-offset: 3px; }
+
+  .console {
+    max-width: 980px;
+    margin: 0 auto;
+    background: linear-gradient(180deg, var(--shell-hi) 0%, var(--shell) 18%, var(--shell) 82%, var(--shell-lo) 100%);
+    border-radius: 14px 14px 22px 22px;
+    padding: 22px 22px 26px;
+    box-shadow:
+      inset 0 2px 0 #3b3c41,
+      inset 0 -4px 0 #0d0d0f,
+      0 30px 60px -20px #000,
+      0 0 0 1px #000;
+    position: relative;
+  }
+  /* Ridge texture on top deck */
+  .deck {
+    height: 22px;
+    margin: -6px -6px 18px;
+    border-radius: 8px;
+    background: repeating-linear-gradient(90deg, #26272b 0 6px, #1a1b1e 6px 9px);
+    box-shadow: inset 0 2px 3px #000;
+  }
+
+  .brand {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .brand h1 {
+    margin: 0; font-size: 18px; letter-spacing: 2px; color: #e6e6e6;
+    text-shadow: 3px 3px 0 var(--red-lo);
+  }
+  .brand h1 span { color: var(--red); text-shadow: 3px 3px 0 #000; }
+  .brand small { display: block; margin-top: 8px; font-size: 8px; color: var(--label-dim); letter-spacing: 1px; line-height: 1.6; }
+  .power { display: flex; align-items: center; gap: 10px; font-size: 8px; color: var(--label-dim); }
+  .led { width: 10px; height: 10px; background: #3a0b0b; box-shadow: inset 0 0 0 1px #000; }
+  .led.on { background: var(--red-glow); box-shadow: 0 0 10px var(--red-glow), 0 0 2px #fff inset; }
+  .led.busy { animation: blink .5s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+
+  .main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 22px; }
+  @media (max-width: 820px) { .main { grid-template-columns: 1fr; } }
+
+  /* ---------- CRT ---------- */
+  .tv {
+    background: linear-gradient(180deg, #2b2c30, #18191b);
+    padding: 16px;
+    border-radius: 10px;
+    box-shadow: inset 0 0 0 2px #000, inset 0 3px 0 #3a3b40;
+  }
+  .screen {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    background: var(--screen);
+    border-radius: 18px / 14px;
+    overflow: hidden;
+    box-shadow: inset 0 0 40px #000, inset 0 0 0 3px #000, 0 0 0 4px #0f1010;
+    display: grid; place-items: center;
+  }
+  .screen img {
+    width: 100%; height: 100%; object-fit: contain; display: block;
+    image-rendering: auto;
+    animation: boot .45s steps(6) both;
+  }
+  @keyframes boot { from { clip-path: inset(50% 0 50% 0); filter: brightness(3); } to { clip-path: inset(0); filter: none; } }
+  .screen::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 1px, transparent 1px 3px),
+      radial-gradient(120% 90% at 50% 50%, transparent 60%, rgba(0,0,0,.55) 100%);
+    mix-blend-mode: multiply;
+  }
+  .screen::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 2;
+    background: linear-gradient(160deg, rgba(255,255,255,.07) 0%, transparent 35%);
+  }
+  .attract {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px; text-align: center; padding: 24px;
+    color: var(--phosphor); font-family: var(--px); font-size: 12px; line-height: 1.8;
+    text-shadow: 0 0 6px rgba(156,247,160,.6);
+  }
+  .attract .big { font-size: 20px; color: var(--amber); text-shadow: 3px 3px 0 var(--red-lo), 0 0 10px rgba(255,207,90,.4); }
+  .attract .blink { animation: blink 1s steps(1) infinite; }
+  .attract .sub { font-family: var(--crt); font-size: 22px; color: var(--phosphor-dim); text-shadow: none; }
+  .bar { width: 70%; height: 14px; border: 2px solid var(--phosphor); padding: 2px; }
+  .bar i { display: block; height: 100%; width: 0; background: repeating-linear-gradient(90deg, var(--phosphor) 0 8px, transparent 8px 10px); transition: width .3s steps(8); }
+  .gameover .big { color: var(--red-glow); }
+
+  .tv-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; gap: 10px; flex-wrap: wrap; }
+  .tv-foot .meta { font-size: 8px; color: var(--label-dim); line-height: 1.6; }
+  .chip-btn {
+    background: var(--plate); border: 0; padding: 8px 10px; font-size: 8px; color: var(--label);
+    box-shadow: inset 0 -3px 0 var(--plate-lo), 0 2px 0 #000; border-radius: 3px;
+  }
+  .chip-btn:active { transform: translateY(2px); box-shadow: inset 0 -1px 0 var(--plate-lo); }
+  .chip-btn[disabled] { opacity: .35; cursor: default; }
+
+  .caption {
+    margin-top: 14px; background: #050605; border: 2px solid #000; border-radius: 4px;
+    font-family: var(--crt); font-size: 19px; line-height: 1.15; color: var(--phosphor);
+    padding: 10px 12px; max-height: 150px; overflow: auto; white-space: pre-wrap;
+    box-shadow: inset 0 0 12px #000;
+  }
+  .caption:empty::before { content: "> CAPTION THE MODEL SAW WILL PRINT HERE_"; color: var(--phosphor-dim); }
+
+  /* ---------- Right side ---------- */
+  .panel { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  .plate {
+    background: linear-gradient(180deg, #45474d, var(--plate));
+    border-radius: 6px;
+    padding: 12px;
+    box-shadow: inset 0 1px 0 #5a5c62, inset 0 -3px 0 var(--plate-lo), 0 0 0 2px #000;
+  }
+  .plate-title { font-size: 8px; color: #1b1c1e; letter-spacing: 1px; margin: 0 0 10px; text-shadow: 0 1px 0 #6a6c72; }
+
+  /* Cartridge */
+  .cart {
+    background: linear-gradient(180deg, var(--cart), var(--cart-lo));
+    border-radius: 6px 6px 2px 2px;
+    padding: 10px 12px 14px;
+    position: relative;
+    box-shadow: inset 0 2px 0 #7a7e86, 0 0 0 2px #000;
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 92% 100%, 92% 94%, 8% 94%, 8% 100%, 0 100%);
+  }
+  .cart::before {
+    content: ""; display: block; height: 8px; margin: 0 6px 8px;
+    background: repeating-linear-gradient(90deg, #3a3d42 0 4px, transparent 4px 8px);
+  }
+  .cart-label {
+    background: var(--cart-label); color: var(--ink); border-radius: 2px; padding: 8px;
+    box-shadow: inset 0 0 0 2px #c9c1ad;
+  }
+  .cart-label .tag { font-size: 7px; display: flex; justify-content: space-between; margin-bottom: 6px; color: var(--red-lo); }
+  #prompt {
+    width: 100%; min-height: 104px; resize: vertical; border: 0; background: transparent; color: var(--ink);
+    font-family: var(--crt); font-size: 22px; line-height: 1.05; outline: none;
+  }
+  #prompt::placeholder { color: #8b8473; }
+
+  /* Memory cards (reference images) */
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .slot {
+    position: relative; aspect-ratio: 1; background: #1d1e21; border: 2px dashed #5b5e65; border-radius: 4px;
+    display: grid; place-items: center; overflow: hidden; font-size: 14px; color: #6c7077;
+  }
+  .slot img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+  .slot button.x {
+    position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; padding: 0; border: 0;
+    background: var(--red); color: #fff; font-size: 8px; line-height: 18px; box-shadow: 0 2px 0 #000;
+  }
+  .slot.add { cursor: pointer; }
+  .slot.add:hover { border-color: var(--amber); color: var(--amber); }
+  .hint { font-size: 7px; color: #1f2023; margin-top: 8px; line-height: 1.6; }
+
+  /* Switches */
+  .switches { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .sw { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .sw > span { font-size: 7px; color: #1b1c1e; text-shadow: 0 1px 0 #6a6c72; }
+  .seg { display: flex; background: #151618; padding: 3px; gap: 3px; border-radius: 3px; box-shadow: inset 0 2px 2px #000; flex-wrap: wrap; }
+  .seg button {
+    flex: 1; border: 0; padding: 7px 4px; font-size: 7px; background: transparent; color: var(--label-dim); border-radius: 2px;
+    min-width: 0;
+  }
+  .seg button[aria-pressed="true"] { background: var(--red); color: #fff; box-shadow: inset 0 -2px 0 var(--red-lo); }
+  .seg button[disabled] { opacity: .3; cursor: default; }
+  .seed-row { display: flex; gap: 6px; align-items: stretch; }
+  .seed-row input[type=number] {
+    flex: 1; min-width: 0; background: #050605; border: 0; color: var(--phosphor); font-family: var(--crt); font-size: 20px;
+    padding: 2px 8px; box-shadow: inset 0 2px 2px #000; border-radius: 3px;
+  }
+  .seed-row input:disabled { color: var(--phosphor-dim); }
+
+  /* Controller */
+  .pad {
+    background: linear-gradient(180deg, #d9d9d6, #b7b8b4);
+    border-radius: 6px; padding: 14px 16px;
+    display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px;
+    box-shadow: inset 0 2px 0 #f2f2ef, inset 0 -3px 0 #8f908c, 0 0 0 2px #000;
+  }
+  .pad-face { background: #1b1b1d; border-radius: 4px; padding: 12px; display: contents; }
+  .dpad { position: relative; width: 84px; height: 84px; }
+  .dpad button {
+    position: absolute; width: 28px; height: 28px; border: 0; background: #1b1b1d; color: #555;
+    font-size: 9px; padding: 0; box-shadow: 0 3px 0 #000;
+  }
+  .dpad button:active { transform: translateY(2px); box-shadow: 0 1px 0 #000; }
+  .dpad .u { left: 28px; top: 0; border-radius: 3px 3px 0 0; }
+  .dpad .d { left: 28px; bottom: 0; border-radius: 0 0 3px 3px; }
+  .dpad .l { left: 0; top: 28px; border-radius: 3px 0 0 3px; }
+  .dpad .r { right: 0; top: 28px; border-radius: 0 3px 3px 0; }
+  .dpad .c { left: 28px; top: 28px; width: 28px; height: 28px; position: absolute; background: #1b1b1d; box-shadow: 0 3px 0 #000; }
+  .dpad .c::after { content: ""; position: absolute; inset: 8px; border-radius: 50%; background: #111; }
+  .mid { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .mid .lbls { display: flex; gap: 16px; font-size: 7px; color: var(--red-lo); }
+  .pills { display: flex; gap: 12px; background: #9fa09c; padding: 6px 10px; border-radius: 4px; }
+  .pill { width: 38px; height: 12px; border: 0; border-radius: 6px; background: #2a2b2e; box-shadow: 0 2px 0 #000; padding: 0; }
+  .pill:active { transform: translateY(2px); box-shadow: none; }
+  .ab { display: flex; gap: 12px; align-items: flex-end; }
+  .ab div { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 9px; color: var(--red-lo); }
+  .round {
+    width: 44px; height: 44px; border-radius: 50%; border: 0; padding: 0;
+    background: radial-gradient(circle at 35% 30%, #ff5b4c, var(--red) 55%, var(--red-lo));
+    box-shadow: 0 4px 0 #4b0a0a, 0 0 0 3px #1b1b1d;
+  }
+  .round:active { transform: translateY(3px); box-shadow: 0 1px 0 #4b0a0a, 0 0 0 3px #1b1b1d; }
+  .round[disabled] { filter: grayscale(.8) brightness(.7); cursor: progress; }
+  .pad-legend { grid-column: 1 / -1; font-size: 7px; color: #55565a; line-height: 1.8; text-align: center; }
+
+  /* History */
+  .history { margin-top: 22px; }
+  .history h2 { font-size: 9px; margin: 0 0 10px; color: var(--label-dim); letter-spacing: 1px; }
+  .strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; }
+  .strip:empty::before { content: "NO SAVES YET."; font-size: 8px; color: #45474c; }
+  .strip button { flex: 0 0 84px; height: 84px; border: 2px solid #000; padding: 0; background: #000; box-shadow: 0 0 0 2px var(--plate); }
+  .strip button:hover { box-shadow: 0 0 0 2px var(--amber); }
+  .strip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  footer { max-width: 980px; margin: 18px auto 0; font-size: 7px; line-height: 1.9; color: #4c4e54; text-align: center; }
+  footer a { color: #7d8189; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  @media (max-width: 480px) {
+    .console { padding: 16px 12px 20px; }
+    .brand h1 { font-size: 13px; }
+    .switches { grid-template-columns: 1fr; }
+    .pad { grid-template-columns: 1fr 1fr; }
+    .pad .mid { grid-column: 1 / -1; order: 3; }
+    .ab { justify-self: end; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="console" role="application" aria-label="FLUX 3 Klein Console">
+  <div class="deck" aria-hidden="true"></div>
+
+  <header class="brand">
+    <div>
+      <h1>FLUX<span>·</span>3 KLEIN <span>SYSTEM</span></h1>
+      <small>8-BIT HOME IMAGE GENERATOR · 5.6B OPEN WEIGHTS · BY BLACK FOREST LABS</small>
+    </div>
+    <div class="power"><div class="led on" id="led"></div><span id="powerText">POWER</span></div>
+  </header>
+
+  <div class="main">
+    <!-- TV -->
+    <section class="tv" aria-label="Screen">
+      <div class="screen" id="screen">
+        <div class="attract" id="attract">
+          <div class="big">FLUX·3 KLEIN</div>
+          <div class="blink">PRESS START</div>
+          <div class="sub">insert a prompt into the cartridge slot</div>
+        </div>
+      </div>
+      <div class="tv-foot">
+        <div class="meta" id="meta">SEED --- · ---×---</div>
+        <div style="display:flex;gap:8px">
+          <button class="chip-btn" id="copySeed" disabled>USE SEED</button>
+          <button class="chip-btn" id="save" disabled>SAVE PNG</button>
+        </div>
+      </div>
+      <div class="caption" id="caption" aria-live="polite"></div>
+    </section>
+
+    <!-- Controls -->
+    <section class="panel">
+      <div class="cart">
+        <div class="cart-label">
+          <div class="tag"><span>GAME PAK · PROMPT</span><span id="count">0/2000</span></div>
+          <label class="sr" for="prompt">Prompt</label>
+          <textarea id="prompt" maxlength="2000" placeholder="a knight sprite fighting a dragon in a moonlit castle, 16-bit pixel art"></textarea>
+        </div>
+      </div>
+
+      <div class="plate">
+        <p class="plate-title">MEMORY CARDS · REFERENCE IMAGES (OPTIONAL)</p>
+        <div class="cards" id="cards"></div>
+        <input type="file" id="file" accept="image/*" multiple hidden>
+        <p class="hint">LOAD UP TO 4 IMAGES TO EDIT OR COMBINE THEM. REFER TO THEM AS "THE FIRST IMAGE", "THE SECOND IMAGE"…</p>
+      </div>
+
+      <div class="plate">
+        <div class="switches">
+          <div class="sw">
+            <span>MODE</span>
+            <div class="seg" id="mode">
+              <button data-v="turbo" aria-pressed="true">TURBO 16</button>
+              <button data-v="classic" aria-pressed="false">CLASSIC 50</button>
+            </div>
+          </div>
+          <div class="sw">
+            <span>RESOLUTION</span>
+            <div class="seg" id="res">
+              <button data-v="1024" aria-pressed="true">1K</button>
+              <button data-v="2048" aria-pressed="false">2K</button>
+            </div>
+          </div>
+          <div class="sw">
+            <span>ASPECT ◀ ▶</span>
+            <div class="seg" id="aspect">
+              <button data-v="1" aria-pressed="true">1:1</button>
+              <button data-v="1.3333" aria-pressed="false">4:3</button>
+              <button data-v="0.75" aria-pressed="false">3:4</button>
+              <button data-v="1.7778" aria-pressed="false">16:9</button>
+              <button data-v="0.5625" aria-pressed="false">9:16</button>
+            </div>
+          </div>
+          <div class="sw">
+            <span>SEED</span>
+            <div class="seed-row">
+              <input type="number" id="seed" value="0" min="0" max="2147483647" disabled aria-label="Seed">
+              <div class="seg" id="rand" style="flex:0 0 auto">
+                <button data-v="1" aria-pressed="true">RND</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pad">
+        <div class="dpad" aria-label="D-pad">
+          <button class="u" data-dir="up" aria-label="Resolution up">▲</button>
+          <button class="l" data-dir="left" aria-label="Previous aspect">◀</button>
+          <div class="c" aria-hidden="true"></div>
+          <button class="r" data-dir="right" aria-label="Next aspect">▶</button>
+          <button class="d" data-dir="down" aria-label="Resolution down">▼</button>
+        </div>
+        <div class="mid">
+          <div class="lbls"><span>SELECT</span><span>START</span></div>
+          <div class="pills">
+            <button class="pill" id="selectBtn" aria-label="Select: switch mode"></button>
+            <button class="pill" id="startBtn" aria-label="Start: generate"></button>
+          </div>
+        </div>
+        <div class="ab">
+          <div><button class="round" id="bBtn" aria-label="B: random cartridge"></button>B</div>
+          <div><button class="round" id="aBtn" aria-label="A: generate"></button>A</div>
+        </div>
+        <div class="pad-legend">A / START = GENERATE · B = RANDOM CART · SELECT = MODE · ◀▶ ASPECT · ▲▼ RES · CTRL+ENTER</div>
+      </div>
+    </section>
+  </div>
+
+  <section class="history">
+    <h2>SAVE FILES</h2>
+    <div class="strip" id="strip"></div>
+  </section>
+</div>
+
+<footer>
+  RUNS ON THE OFFICIAL <a href="https://huggingface.co/spaces/black-forest-labs/flux-3-image-klein" target="_blank" rel="noopener">BLACK-FOREST-LABS/FLUX-3-IMAGE-KLEIN</a> SPACE ·
+  WEIGHTS: <a href="https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy" target="_blank" rel="noopener">FLUX-3-IMAGE-KLEIN-COMFY</a> ·
+  FLUX KOMMUNITY LICENSE · FAN DEMO, NOT AFFILIATED WITH BFL
+</footer>
+
+<script type="module">
+  import { Client, handle_file } from "https://cdn.jsdelivr.net/npm/@gradio/client@2.7.1/dist/index.min.js";
+
+  const SPACE = "black-forest-labs/flux-3-image-klein";
+  const MAX_REFS = 4;
+  const MAX_SEED = 2147483647;
+  const MODES = {
+    turbo:   { name: "Distilled (16 steps)", steps: 16, cfg: 1.0 },
+    classic: { name: "Base (50 steps)",      steps: 50, cfg: 4.0 },
+  };
+  const CARTS = [
+    "a tiny wizard brewing potions in a cluttered tower, 16-bit pixel art",
+    "a neon arcade on a rainy night street in Tokyo, cinematic photo",
+    "a retro game console box art for a space shooter called STAR KLEIN",
+    "a cozy diner at sunrise, chrome counters, warm film photography",
+    "an orange cat astronaut floating above the moon, children's book illustration",
+    "a hand-drawn treasure map of a volcanic island with sea monsters",
+    "a vintage travel poster for the planet Saturn, bold screen print",
+    "a red racing car on a coastal highway, 1980s anime style",
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const state = { mode: "turbo", res: 1024, aspect: 1, rand: true, refs: [], busy: false, last: null };
+  let clientPromise = null;
+  const getClient = () => (clientPromise ??= Client.connect(SPACE).catch((e) => { clientPromise = null; throw e; }));
+
+  // ---------- segmented switches ----------
+  function bindSeg(id, key, parse) {
+    $(id).addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b || b.disabled) return;
+      if (id === "rand") { state.rand = !state.rand; syncUI(); return; }
+      state[key] = parse(b.dataset.v);
+      syncUI();
+    });
+  }
+  bindSeg("mode", "mode", (v) => v);
+  bindSeg("res", "res", Number);
+  bindSeg("aspect", "aspect", Number);
+  bindSeg("rand", "rand", Boolean);
+
+  function syncUI() {
+    if (state.mode === "classic") state.res = 1024; // base is 1K only on the hosted Space
+    for (const [id, val] of [["mode", state.mode], ["res", String(state.res)], ["aspect", String(state.aspect)]]) {
+      $(id).querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === val)));
+    }
+    $("res").querySelector('[data-v="2048"]').disabled = state.mode === "classic";
+    $("rand").querySelector("button").setAttribute("aria-pressed", String(state.rand));
+    $("seed").disabled = state.rand;
+    $("aBtn").disabled = $("startBtn").disabled = state.busy;
+    $("led").classList.toggle("busy", state.busy);
+    $("powerText").textContent = state.busy ? "WORKING" : "POWER";
+  }
+
+  // ---------- prompt ----------
+  const prompt = $("prompt");
+  prompt.addEventListener("input", () => ($("count").textContent = `${prompt.value.length}/2000`));
+  prompt.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); start(); }
+  });
+
+  // ---------- reference images ----------
+  const fileInput = $("file");
+  function renderCards() {
+    const wrap = $("cards");
+    wrap.innerHTML = "";
+    state.refs.forEach((r, i) => {
+      const d = document.createElement("div");
+      d.className = "slot";
+      d.innerHTML = `<img alt="Reference ${i + 1}"><button class="x" aria-label="Remove reference ${i + 1}">X</button>`;
+      d.querySelector("img").src = r.url;
+      d.querySelector("button").onclick = () => { URL.revokeObjectURL(r.url); state.refs.splice(i, 1); renderCards(); };
+      wrap.appendChild(d);
+    });
+    for (let i = state.refs.length; i < MAX_REFS; i++) {
+      const d = document.createElement("button");
+      d.className = "slot add";
+      d.textContent = i === state.refs.length ? "+" : "";
+      d.setAttribute("aria-label", "Add reference image");
+      d.onclick = () => fileInput.click();
+      wrap.appendChild(d);
+    }
+  }
+  async function addFiles(files) {
+    for (const f of files) {
+      if (state.refs.length >= MAX_REFS || !f.type.startsWith("image/")) continue;
+      const url = URL.createObjectURL(f);
+      const img = await new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = url; });
+      if (!img) { URL.revokeObjectURL(url); continue; }
+      state.refs.push({ file: f, url, aspect: img.naturalWidth / img.naturalHeight });
+    }
+    renderCards();
+  }
+  fileInput.addEventListener("change", () => { addFiles(fileInput.files); fileInput.value = ""; });
+  document.addEventListener("paste", (e) => {
+    const files = [...(e.clipboardData?.files || [])];
+    if (files.length) addFiles(files);
+  });
+  $("cards").addEventListener("dragover", (e) => e.preventDefault());
+  $("cards").addEventListener("drop", (e) => { e.preventDefault(); addFiles(e.dataTransfer.files); });
+  renderCards();
+
+  // ---------- size ----------
+  function dims() {
+    const a = state.refs.length && state.aspect === 1 && Math.abs(state.refs[0].aspect - 1) > 0.02
+      ? state.refs[0].aspect : state.aspect; // 1:1 with a non-square reference follows the reference
+    const S = state.res;
+    const h = Math.sqrt((S * S) / a), w = h * a;
+    const r16 = (x) => Math.max(256, Math.min(4096, Math.round(x / 16) * 16));
+    return [r16(w), r16(h)];
+  }
+
+  // ---------- screen states ----------
+  const screen = $("screen");
+  function showAttract(html, cls = "") {
+    screen.innerHTML = `<div class="attract ${cls}">${html}</div>`;
+  }
+  function showLoading(line1, pct) {
+    let el = screen.querySelector(".loading");
+    if (!el) {
+      screen.innerHTML = `<div class="attract loading"><div class="big blink">NOW LOADING</div><div class="bar"><i></i></div><div class="sub"></div></div>`;
+      el = screen.querySelector(".loading");
+    }
+    el.querySelector(".sub").textContent = line1;
+    if (pct != null) el.querySelector(".bar i").style.width = `${Math.max(4, Math.min(100, pct))}%`;
+  }
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  // ---------- generate ----------
+  async function start() {
+    if (state.busy) return;
+    const text = prompt.value.trim();
+    if (!text) {
+      showAttract(`<div class="big">NO CARTRIDGE</div><div class="sub">type a prompt first, or press B for a random cart</div>`, "gameover");
+      prompt.focus();
+      return;
+    }
+    const m = MODES[state.mode];
+    const [width, height] = dims();
+    const seed = state.rand ? 0 : Math.max(0, Math.min(MAX_SEED, parseInt($("seed").value, 10) || 0));
+
+    state.busy = true; syncUI();
+    $("caption").textContent = "";
+    showLoading("connecting to the mainframe…", 5);
+
+    // fake-but-honest progress: queue info when we have it, a slow crawl while the GPU works
+    let pct = 5, phase = "queue";
+    const tick = setInterval(() => {
+      if (phase !== "gen") return;
+      pct = Math.min(94, pct + (94 - pct) * 0.06);
+      showLoading("upsampling prompt + painting pixels…", pct);
+    }, 500);
+
+    try {
+      const client = await getClient();
+      const job = client.submit("/generate", {
+        prompt: text,
+        input_images: state.refs.map((r) => ({ image: handle_file(r.file), caption: null })),
+        mode_choice: m.name,
+        seed,
+        randomize_seed: state.rand,
+        width,
+        height,
+        num_inference_steps: m.steps,
+        guidance_scale: m.cfg,
+        prompt_upsampling: true,
+      });
+
+      let result = null;
+      for await (const msg of job) {
+        if (msg.type === "status") {
+          if (msg.stage === "error") throw new Error(msg.message || "The Space returned an error.");
+          if (msg.stage === "pending" && msg.position != null) {
+            showLoading(`in line: ${msg.position + 1} player${msg.position ? "s" : ""} ahead${msg.eta ? ` · ~${Math.round(msg.eta)}s` : ""}`, 10);
+          } else if (msg.stage === "pending" || msg.stage === "generating") {
+            if (phase !== "gen") { phase = "gen"; pct = Math.max(pct, 12); }
+            const pd = msg.progress_data?.[0];
+            if (pd?.length && pd.index != null) {
+              pct = Math.max(pct, 15 + (80 * (pd.index + 1)) / pd.length);
+              showLoading(pd.desc || `step ${pd.index + 1}/${pd.length}`, pct);
+            }
+          }
+        } else if (msg.type === "data") {
+          result = msg.data;
+          break;
+        }
+      }
+      if (!result) throw new Error("No image came back.");
+      const [img, usedSeed, caption] = result;
+      const url = img?.url || img?.path || img;
+      showResult({ url, seed: Math.round(usedSeed), caption, width, height, prompt: text });
+    } catch (err) {
+      console.error(err);
+      const msg = String(err?.message || err);
+      const quota = /quota|GPU|exceeded/i.test(msg);
+      showAttract(
+        `<div class="big">GAME OVER</div><div class="sub">${esc(msg).slice(0, 220)}</div>` +
+        (quota ? `<div class="sub">GPU quota is shared per visitor. Log in on huggingface.co or wait a bit, then CONTINUE.</div>` : "") +
+        `<div class="blink">PRESS A TO CONTINUE</div>`, "gameover");
+    } finally {
+      clearInterval(tick);
+      state.busy = false; syncUI();
+    }
+  }
+
+  function showResult(r, record = true) {
+    state.last = r;
+    screen.innerHTML = "";
+    const im = new Image();
+    im.alt = r.prompt;
+    im.src = r.url;
+    screen.appendChild(im);
+    $("caption").textContent = r.caption ? `> ${r.caption}` : "";
+    $("meta").textContent = `SEED ${r.seed} · ${r.width}×${r.height}`;
+    $("save").disabled = $("copySeed").disabled = false;
+    if (record) {
+      const b = document.createElement("button");
+      b.title = r.prompt;
+      b.innerHTML = `<img alt="">`;
+      b.querySelector("img").src = r.url;
+      b.onclick = () => showResult(r, false);
+      $("strip").prepend(b);
+    }
+  }
+
+  $("save").onclick = async () => {
+    const r = state.last; if (!r) return;
+    try {
+      const blob = await (await fetch(r.url)).blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `flux3-klein-${r.seed}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch { window.open(r.url, "_blank", "noopener"); }
+  };
+  $("copySeed").onclick = () => {
+    if (!state.last) return;
+    state.rand = false; $("seed").value = state.last.seed; syncUI();
+  };
+
+  // ---------- controller ----------
+  const ASPECTS = [...$("aspect").querySelectorAll("button")].map((b) => Number(b.dataset.v));
+  function cycleAspect(d) { const i = ASPECTS.indexOf(state.aspect); state.aspect = ASPECTS[(i + d + ASPECTS.length) % ASPECTS.length]; syncUI(); }
+  function setRes(up) { if (state.mode === "classic") return; state.res = up ? 2048 : 1024; syncUI(); }
+  document.querySelector(".dpad").addEventListener("click", (e) => {
+    const d = e.target.closest("button")?.dataset.dir;
+    if (d === "left") cycleAspect(-1);
+    if (d === "right") cycleAspect(1);
+    if (d === "up") setRes(true);
+    if (d === "down") setRes(false);
+  });
+  $("aBtn").onclick = $("startBtn").onclick = start;
+  $("selectBtn").onclick = () => { state.mode = state.mode === "turbo" ? "classic" : "turbo"; syncUI(); };
+  $("bBtn").onclick = () => {
+    let next; do { next = CARTS[Math.floor(Math.random() * CARTS.length)]; } while (next === prompt.value && CARTS.length > 1);
+    prompt.value = next; prompt.dispatchEvent(new Event("input"));
+  };
+  syncUI();
+</script>
+</body>
 </html>
